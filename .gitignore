@@ -1,0 +1,9 @@
+# Created by .ignore support plugin (hsz.mobi)
+.DS_Store
+.gitignore
+.idea/workspace.xml
+app/.DS_Store
+tmp/cache/
+tmp/pids/
+tmp/sockets/
+vendor/
