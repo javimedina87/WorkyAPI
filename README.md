@@ -1,2 +1,0 @@
-# WorkyAPI
-Project backend
