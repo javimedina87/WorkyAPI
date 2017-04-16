@@ -26,5 +26,9 @@ module HomeLibrary
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+    secrets.token_key = 'w0rKy$ecretk3Y'
+    secrets.token_algorithm = 'HS256'
+
+    secrets.password_key = '5-j9c%R?U9>m0'
   end
 end

@@ -1,99 +1,68 @@
 class UsersController < ApplicationController
 
+  before_action :authenticate_request!, :except => [:login, :register]
+
+  #TODO delete this method
   # GET /users
   def index
     @users = User.all
-
-    begin
-      decoded_token = JWT.decode token, hmac_secret, true, { :algorithm => 'HS256' }
-      binding.pry
-    rescue JWT::ExpiredSignature
-      # Handle expired token, e.g. logout user or deny access
-    end
-
     render json: @users
-  end
-
-  # GET /users/1
-  def show
-    render json: @user
-  end
-
-  def hola
-    render json: { message: "holaaaaa" }, status: 200
   end
 
   # Check user credentials
   def login
-    user_name = params[:username]
-    user_password = params[:password]
-    user_attributes = User.where(username: user_name, password: user_password).pluck(:id, :username)
+    user = User.find_by_email(params[:email])
 
-    if user_attributes.present?
+    if user.present? && validate_password(user)
+      #Create token for logged user
+      expiration = Time.now.to_i + 600
+      payload = { user_id: user.id, user_name: user.username, exp: expiration }
+      token = JWT.encode payload, Rails.application.secrets.token_key, Rails.application.secrets.token_algorithm, header_fields={hola:'epas'}
 
-      #Time to expire (20secs)
-      exp = Time.now.to_i + 60
-      exp_payload = { :data => 'data', :exp => exp }
+      #Save new token for logged user
+      User.find_by_id(user.id).update(token: token)
+      render json: { JWT: token }, status: 200
+    else
+      render json: { error: 'Invalid email or password' }, status: 400
+    end
+  end
 
-      hmac_secret = 'my$ecretK3y'
+  # Add new user to database, email must be unique
+  def register
+    email_is_unique = User.find_by_email(params[:email])
 
-# IMPORTANT: set nil as password parameter
-      token = JWT.encode exp_payload, hmac_secret, 'HS256'
+    if !email_is_unique.present?
 
-# Try decoded_token
-      begin
-        decoded_token = JWT.decode token, hmac_secret, true, { :algorithm => 'HS256' }
-      rescue JWT::ExpiredSignature
-        # Handle expired token, e.g. logout user or deny access
-      end
+      #Create user in database
+      user = User.new(username: params[:username], password: encrypt_password, email: params[:email])
+      user.save
+
+      #Create token for new user having id
+      expiration = Time.now.to_i + 600
+      payload = { user_id: user.id, user_name: user.username, exp: expiration }
+      token = JWT.encode payload, Rails.application.secrets.token_key, Rails.application.secrets.token_algorithm
+
+      #Save first token for registered user
+      User.find_by_id(user.id).update(token: token)
 
       render json: { JWT: token }, status: 200
     else
-      render json: { error: "Invalid email or password" }, status: 400
+      render json: { error: 'Email already exists' }, status: 409
     end
   end
 
-
-
-  def jwt
-
-    token = params[:token]
-
-
-    # Try decoded_token
-    begin
-      decoded_token = JWT.decode token, hmac_secret, true, { :algorithm => 'HS256' }
-
-    rescue JWT::ExpiredSignature
-      # Handle expired token, e.g. logout user or deny access
-      render json: { error: "token null" }, status: 400
-    end
-
+  private
+  #Encrypt password for new user
+  def encrypt_password
+    verifier = ActiveSupport::MessageVerifier.new Rails.application.secrets.password_key
+    verifier.generate params[:password]
   end
 
-
-
-
-
-
-
-
-  # Add new user
-  def register
-    user_name = params[:username]
-    user_password = params[:password]
-    user_email = params[:email]
-    userIsUnique = User.where(username: user_name).or(User.where(email: user_email))
-    binding.pry
-    if !userIsUnique.present?
-      user = User.new(username: user_name, password: user_password, email: user_email)
-      user.save
-      render json: { success: "User saved successfully" }, status: 200
-    else
-      render json: { error: "Username or email already exit" }, status: 409
-    end
+  #Check user password from database and form
+  def validate_password(user)
+    verifier = ActiveSupport::MessageVerifier.new Rails.application.secrets.password_key
+    db_password = verifier.verify(user.password)
+    db_password == params[:password]
   end
-
-
 
 end
